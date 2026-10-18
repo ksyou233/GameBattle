@@ -1,0 +1,65 @@
+@startuml
+!pragma layout smetana
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam nodesep 25
+skinparam ranksep 26
+
+title 图 9  组合模式 Composite —— 技能树与连招
+
+abstract class Skill <<抽象构件 Component>> {
+  + name() : string
+  + describe() : string
+  + execute(caster, target, bus)
+}
+
+class AttackSkill <<叶子 Leaf>> {
+  - powerScale_ : double
+  - inflict_ : StateKind
+  - inflictRate_ : double
+  + execute() : 走责任链结算一次伤害
+               并按概率附加状态
+}
+
+class HealSkill <<叶子 Leaf>> {
+  - healAmount_ : int
+  + execute() : 回复生命并广播事件
+}
+
+class ComboSkill <<容器 Composite>> {
+  - parts_ : vector<Skill*>
+  + add(part)
+  + execute() : 依次调用每个子技能的 execute()
+}
+
+Skill <|-- AttackSkill
+Skill <|-- HealSkill
+Skill <|-- ComboSkill
+ComboSkill o-- "1..*" Skill : parts_ 子技能
+
+note right of ComboSkill
+  <b>递归结构</b>
+  ComboSkill 既是 Skill，又持有若干 Skill。
+  因此连招里可以再嵌连招，
+  自然形成一棵技能树。
+end note
+
+note bottom of Skill
+  <b>一致性调用（组合模式的核心价值）</b>
+  战斗循环里只有一行：skill->execute(caster, target, bus);
+  它不区分这一招是单体技能还是连招，也不需要任何分支判断。
+  实际项目中的连招实例：
+  · 裂地三连斩 = 斩击·壹 → 斩击·贰 → 斩击·叁(50% 眩晕)
+  · 冰火两重天 = 烈焰冲击 → 寒冰禁锢(100% 冰冻)
+  · 疾风三连射 = 第一箭 → 第二箭 → 第三箭
+  · 暗影吐息 = 暗影冲击 → 龙息
+end note
+
+class Battle <<调用方 Client>> {
+  + actOnce(actor)
+}
+Battle ..> Skill : 统一调用 execute()
+
+@enduml

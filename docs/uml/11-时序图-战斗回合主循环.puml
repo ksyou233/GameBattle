@@ -1,0 +1,68 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign left
+
+title 图 11  时序图 —— 战斗回合主循环
+
+actor "Battle\n(战斗主循环)" as B
+participant "Combatant\n(参战单位)" as C
+participant "AIStrategy\n(策略)" as AI
+participant "Skill\n(技能/连招)" as S
+participant "EventBus\n(事件总线)" as BUS
+participant "各观察者" as OB
+
+B -> B : run()
+
+loop 每个回合（上限 30）
+    B -> BUS : notify(TurnStart, 第 N 回合)
+    BUS -> OB : onEvent(...)
+
+    loop 每个存活单位（英雄先手，怪物后手）
+        B -> C : canAct()
+        alt 处于【眩晕】或【冰冻】
+            B -> BUS : notify(NoAction, 无法行动)
+            BUS -> OB : onEvent(...)
+        else 可以行动
+            B -> AI : chooseSkill(self, enemies)
+            AI --> B : 技能对象 / nullptr
+            alt 返回 nullptr（选择防御）
+                B -> BUS : notify(NoAction, 选择防御)
+            else 返回技能对象
+                B -> S : execute(caster, target, bus)
+                note right of S
+                  技能内部递归展开：
+                  连招会依次调用子技能，
+                  每个子技能走一遍责任链结算。
+                  全过程通过 EventBus 广播。
+                end note
+                S -> BUS : notify(DamageDealt / CriticalHit / Dodged / ...)
+                BUS -> OB : onEvent(...)
+                alt 目标血量归零
+                    B -> BUS : notify(CharacterDied)
+                    BUS -> OB : onEvent(...)
+                end
+            end
+        end
+    end
+
+    B -> C : tickState()（所有存活单位）
+    note right of C
+      状态计时递减，
+      到期的状态自动切回 NormalState，
+      并广播 StateChanged。
+      从眩晕/冰冻恢复者获得 1 回合控制抗性。
+    end note
+    C -> BUS : notify(StateChanged)
+    BUS -> OB : onEvent(...)
+
+    B -> B : 判断胜负（一方全灭 或 回合耗尽）
+end
+
+B -> BUS : notify(BattleEnd)
+BUS -> OB : onEvent(...)
+B --> B : return BattleResult
+
+@enduml

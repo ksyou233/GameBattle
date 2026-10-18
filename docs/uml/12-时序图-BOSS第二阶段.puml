@@ -1,0 +1,55 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign left
+
+title 图 12  时序图 —— BOSS 第二阶段：观察者模式与状态模式的联动
+
+actor "亚瑟" as A
+participant "DamageChain" as DC
+participant "暗影魔龙\n(Combatant)" as BOSS
+participant "EventBus" as BUS
+participant "BattleLogObserver" as LOG
+participant "AchievementObserver" as ACH
+participant "BossPhaseObserver" as PHASE
+
+A -> DC : resolve(亚瑟, 暗影魔龙, 倍率 1.4)
+DC -> DC : 四段责任链结算 → 80 点暴击伤害
+DC -> BOSS : takeDamage(80)
+BOSS -> BOSS : hp_ : 289 → 209（占最大生命 23%）
+DC -> BUS : notify(CriticalHit, 目标=暗影魔龙, 值=80)
+
+BUS -> LOG : onEvent(CriticalHit)
+LOG --> BUS : 打印"造成 80 点伤害（暴击！）"
+
+BUS -> ACH : onEvent(CriticalHit)
+ACH -> ACH : criticalCount_ 达到 3 → 解锁成就
+ACH --> BUS : 打印"成就解锁：【致命节奏】"
+
+BUS -> PHASE : onEvent(CriticalHit)
+PHASE -> PHASE : 目标名匹配且尚未触发过
+PHASE -> BOSS : hp() / maxHp() = 0.23 < 0.5
+PHASE -> PHASE : triggered_ = true（先置位，防止回调重入）
+PHASE -> BOSS : inflictState(Berserk)
+BOSS -> BOSS : switchState(Berserk)
+note right of BOSS
+  攻击 x1.5、防御 x0.5
+  且免疫控制类状态
+end note
+BOSS -> BUS : notify(StateChanged, "进入狂暴")
+
+BUS -> LOG : onEvent(StateChanged)
+LOG --> BUS : 打印"★ 暗影魔龙 进入【狂暴】状态"
+
+note over A, PHASE
+  <b>关键点：整条链路里，"战斗结算"始终不知道 BOSS 有第二阶段。</b>
+  它只负责广播一条"暗影魔龙掉血了"的事件。
+  决定"血量跌破 50% 就狂暴"的是 BossPhaseObserver，
+  真正执行状态切换的是状态模式的 switchState()。
+  三者各自独立，通过事件总线松耦合地拼在一起 ——
+  这正是观察者模式 + 状态模式组合使用的价值。
+end note
+
+@enduml

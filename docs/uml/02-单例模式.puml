@@ -1,0 +1,51 @@
+@startuml
+!pragma layout smetana
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam nodesep 30
+
+title 图 2  单例模式 Singleton —— GameConfig
+
+class GameConfig <<单例 Singleton>> {
+  - {static} theInstance : GameConfig
+  - maxTurns_ : int
+  - critMultiplier_ : double
+  - blockRate_ : double
+  - blockReduction_ : double
+  - rng_ : mt19937
+  - GameConfig()
+  + {static} instance() : GameConfig&
+  + roll(low, high) : int
+  + roll01() : double
+  + critMultiplier() : double
+  + blockRate() : double
+  + setSeed(seed)
+  + banner()
+}
+
+note right of GameConfig
+  <b>三个关键约束</b>
+  1. 构造函数私有 → 外界无法 new
+  2. 拷贝构造 / 赋值被 delete → 无法复制出第二个实例
+  3. instance() 内的静态局部变量
+     （Meyers Singleton，C++11 起线程安全）
+end note
+
+note left of GameConfig
+  <b>为什么需要它</b>
+  暴击倍率、格挡概率、随机源如果各处各持一份，
+  会出现"参数不一致"与"战斗过程无法复现"。
+  单例保证全局只有一份规则与一台随机数发生器。
+end note
+
+class Character
+class DamageChain
+class AttackSkill
+
+Character ..> GameConfig : 查询规则
+DamageChain ..> GameConfig : roll01 判定暴击
+AttackSkill ..> GameConfig : roll01 判定附加状态
+
+@enduml

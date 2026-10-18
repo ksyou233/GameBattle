@@ -1,0 +1,85 @@
+@startuml
+!pragma layout smetana
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam nodesep 25
+skinparam ranksep 26
+
+title 图 8  责任链模式 Chain of Responsibility —— 伤害结算流水线
+
+abstract class DamageHandler <<抽象处理者 Handler>> {
+  # next_ : DamageHandler*
+  + setNext(next)
+  + handle(ctx : DamageContext&)
+  + name() : string
+}
+
+class DodgeHandler <<具体处理者>> {
+  按 defender.dodgeRate() 判定闪避
+  闪避成功 → 终止链条，不再后传
+}
+class ArmorHandler <<具体处理者>> {
+  调用 attacker.damageType().compute()
+  得到基础伤害
+}
+class BlockHandler <<具体处理者>> {
+  按 GameConfig.blockRate() 判定格挡
+  触发则伤害 × 0.70，并置位 ctx.blocked
+}
+class CritHandler <<具体处理者>> {
+  按 attacker.critRate() 判定暴击
+  触发则伤害 × 2.0
+}
+
+class DamageChain <<链的组装者>> {
+  - handlers_ : vector<DamageHandler*>
+  + DamageChain()
+  + resolve(attacker, defender, mult) : DamageContext
+}
+
+class DamageContext <<上下文>> {
+  + attacker : Combatant*
+  + defender : Combatant*
+  + powerMultiplier : double
+  + damage : int
+  + dodged : bool
+  + blocked : bool
+  + crit : bool
+  + trace : vector<string>
+}
+
+DamageHandler <|-- DodgeHandler
+DamageHandler <|-- ArmorHandler
+DamageHandler <|-- BlockHandler
+DamageHandler <|-- CritHandler
+DamageHandler --> "0..1" DamageHandler : next_ 下一环
+DamageChain o-- "4" DamageHandler : 持有整条链
+DamageChain ..> DamageContext : 创建并传递
+
+note right of DamageChain
+  <b>链的实际顺序</b>
+  闪避判定 → 护甲减伤 → 格挡判定 → 暴击判定
+  在构造函数中按顺序 setNext() 串联。
+  <b>中途截断</b>：闪避成功时 DodgeHandler
+  直接 return，不再调用基类 handle()，
+  链条就此终止 —— 这是责任链的典型用法。
+  <b>环节只判定，出口才广播</b>：
+  四个环节都不直接 notify()，只把结论写进 DamageContext；
+  真正广播事件的是链的出口 performAttack() ——
+  dodged → Dodged，crit → CriticalHit / DamageDealt，
+  blocked → 额外再发一条 Blocked。
+end note
+
+note bottom of DamageContext
+  <b>trace 字段的额外收获</b>
+  每个环节把自己的判定结果写入 trace，
+  于是每一刀都能输出完整的结算轨迹，
+  直接成为文档与答辩材料里"一次伤害是怎么算出来的"证据。
+  实测样例：
+  闪避判定：命中 → 护甲减伤：按【物理】规则结算 43 vs DEF 20 -> 23
+  → 格挡判定：未触发 → 暴击判定：触发暴击 x2 -> 46
+end note
+
+@enduml

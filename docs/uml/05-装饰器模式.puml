@@ -1,0 +1,78 @@
+@startuml
+!pragma layout smetana
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam nodesep 25
+skinparam ranksep 26
+
+title 图 5  装饰器模式 Decorator —— 装备与附魔的逐层叠加
+
+abstract class Combatant <<统一接口 Component>> {
+  + atk() : int
+  + def() : int
+  + critRate() : double
+  + damageType() : DamageStrategy&
+  + takeDamage(amount, source) : int
+  + describe() : string
+}
+
+class Character <<具体构件 ConcreteComponent>> {
+  - baseAtk_ : int
+  - baseDef_ : int
+  - critRate_ : double
+}
+
+abstract class EquipmentDecorator <<装饰器基类 Decorator>> {
+  - inner_ : Combatant
+  - equipmentName_ : string
+  - chainLabel_ : string
+  # bonusAtk() : int
+  # bonusDef() : int
+  # bonusCrit() : double
+  + atk() : inner_->atk() + bonusAtk()
+  + def() : inner_->def() + bonusDef()
+  + critRate() : inner_->critRate() + bonusCrit()
+}
+
+class WeaponDecorator <<具体装饰 ConcreteDecorator>> {
+  + bonusAtk() : +9
+}
+class ArmorDecorator <<具体装饰 ConcreteDecorator>> {
+  + bonusDef() : +6
+}
+class FireEnchantDecorator <<具体装饰 ConcreteDecorator>> {
+  + bonusAtk() : +7
+  + damageType() : 改写为 MagicDamage
+}
+class CritGemDecorator <<具体装饰 ConcreteDecorator>> {
+  + bonusCrit() : +0.12
+}
+
+Combatant <|.. Character
+Combatant <|.. EquipmentDecorator
+EquipmentDecorator <|-- WeaponDecorator
+EquipmentDecorator <|-- ArmorDecorator
+EquipmentDecorator <|-- FireEnchantDecorator
+EquipmentDecorator <|-- CritGemDecorator
+EquipmentDecorator o-- "1" Combatant : inner_ 被装饰对象
+
+note right of EquipmentDecorator
+  <b>可以套娃的关键</b>
+  装饰器自身实现了 Combatant 接口，
+  因此它既能装饰"裸角色"，
+  也能被另一个装饰器装饰，
+  形成任意深度的包装链。
+  调用方始终只面对 Combatant，
+  全程无需 dynamic_cast。
+end note
+
+note bottom of FireEnchantDecorator
+  <b>与策略模式的联动</b>
+  它只覆写了 damageType()，
+  于是整条伤害结算流水线的算法被换掉 ——
+  这就是运行期实测看到的"附魔后伤害类型由物理变魔法"。
+end note
+
+@enduml

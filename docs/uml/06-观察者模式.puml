@@ -1,0 +1,85 @@
+@startuml
+!pragma layout smetana
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam nodesep 25
+skinparam ranksep 26
+
+title 图 6  观察者模式 Observer —— 战斗事件广播
+
+class EventBus <<主题 Subject>> {
+  - observers_ : vector<IBattleObserver*>
+  + attach(o : IBattleObserver*)
+  + detach(o : IBattleObserver*)
+  + notify(event : BattleEvent)
+}
+
+interface IBattleObserver <<观察者 Observer>> {
+  + onEvent(event : BattleEvent)
+  + observerName() : string
+}
+
+class BattleEvent <<事件数据>> {
+  + type : EventType
+  + source : string
+  + target : string
+  + value : int
+  + message : string
+}
+
+class BattleLogObserver <<具体观察者>> {
+  打印格式化战斗日志
+}
+class AchievementObserver <<具体观察者>> {
+  - criticalCount_ : int
+  - blockCount_ : int
+  - killCount_ : int
+  达到阈值时解锁成就
+}
+class BossPhaseObserver <<具体观察者>> {
+  - watched_ : Combatant*
+  - hpThreshold_ : double
+  - triggerState_ : StateKind
+  - triggered_ : bool
+  血量跌破阈值 → 给目标挂上狂暴
+}
+class BattleRecorderObserver <<具体观察者>> {
+  - records_ : vector<BattleEvent>
+  录制全过程，可导出战报
+}
+
+EventBus o-- "0..*" IBattleObserver : 订阅名单
+IBattleObserver <|.. BattleLogObserver
+IBattleObserver <|.. AchievementObserver
+IBattleObserver <|.. BossPhaseObserver
+IBattleObserver <|.. BattleRecorderObserver
+EventBus ..> BattleEvent : 分发事件
+BossPhaseObserver --> "1" Combatant : 监听目标
+
+class Character <<事件源>> {
+  状态变化时主动广播
+}
+class Battle <<事件源>> {
+  回合与生死事件广播
+}
+
+Character ..> EventBus : notify(StateChanged)
+Battle ..> EventBus : notify(TurnStart / CharacterDied)
+
+note bottom of EventBus
+  <b>解耦的价值（答辩重点）</b>
+  事件源完全不知道谁在听、有几个观察者。
+  本项目中"BOSS 血量过半进入狂暴"这一功能，
+  是通过在 main 里追加一行 bus.attach(&bossPhase) 实现的，
+  战斗结算代码<b>一行都没有改</b>。
+  同理，新增"伤害统计面板""战斗录像导出"也只加一个类。
+  <b>一对多的实证：格挡事件</b>
+  责任链出口发出的 EventType::Blocked 被两个观察者同时消费 ——
+  战斗日志给它配 ⊘ 前缀，成就系统累计次数并解锁「铜墙铁壁」。
+  统计行里的"格挡次数"就是观察者独立采集的，
+  战斗结算代码里找不到任何计数器。
+end note
+
+@enduml

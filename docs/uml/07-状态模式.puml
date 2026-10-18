@@ -1,0 +1,86 @@
+@startuml
+!pragma layout smetana
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam nodesep 25
+skinparam ranksep 26
+
+title 图 7  状态模式 State —— 角色状态机
+
+abstract class CharacterState <<抽象状态 State>> {
+  + kind() : StateKind
+  + name() : string
+  + canAct() : bool
+  + atkMultiplier() : double
+  + defMultiplier() : double
+  + incomingMultiplier() : double
+  + immuneToControl() : bool
+  + duration() : int
+}
+
+class NormalState <<具体状态>> {
+  canAct = true
+  全部系数 = 1.0
+  duration = 无限
+}
+class StunnedState <<具体状态>> {
+  canAct = false（无法行动）
+  duration = 2
+}
+class FrozenState <<具体状态>> {
+  canAct = false（无法行动）
+  incomingMultiplier = 1.5（破冰易伤）
+  duration = 2
+}
+class BerserkState <<具体状态>> {
+  atkMultiplier = 1.5
+  defMultiplier = 0.5
+  immuneToControl = true（免疫控制）
+  duration = 无限
+}
+
+class Character <<上下文 Context>> {
+  - state_ : CharacterState*
+  - stateTurnsLeft_ : int
+  - controlImmunityTurns_ : int
+  + atk() : baseAtk * state_->atkMultiplier()
+  + def() : baseDef * state_->defMultiplier()
+  + takeDamage() : amount * state_->incomingMultiplier()
+  + canAct() : state_->canAct()
+  + inflictState(kind)
+  + tickState()
+  + switchState(kind)
+}
+
+class makeState <<简单工厂>> {
+  + makeState(kind) : CharacterState*
+}
+
+CharacterState <|-- NormalState
+CharacterState <|-- StunnedState
+CharacterState <|-- FrozenState
+CharacterState <|-- BerserkState
+Character --> "1" CharacterState : 当前状态
+makeState ..> CharacterState : 创建状态对象
+
+note right of Character
+  <b>上下文只做三件事</b>
+  1. 把状态提供的系数乘到 atk/def/受伤上
+  2. canAct() 直接问状态
+  3. tickState() 计时到期后切回 NormalState
+  角色类里<b>没有任何</b> if (state == 眩晕) 之类的分支。
+end note
+
+note bottom of BerserkState
+  <b>两条写在状态内部的规则（体现模式深度）</b>
+  · 狂暴免疫控制 —— 否则玩家一个控制技能
+    就能白白拖过 BOSS 的爆发期
+  · 从眩晕/冰冻恢复后获得 1 回合控制抗性 ——
+    防止被无限连控锁死（这是实测中真实发现并修复的问题）
+  两条规则都属于"状态自身的行为"，因此被封装在状态类里，
+  而不是散成技能代码中的硬编码判断。
+end note
+
+@enduml

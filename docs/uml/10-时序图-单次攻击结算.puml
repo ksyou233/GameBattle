@@ -1,0 +1,85 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+
+title 图 10  时序图 —— 一次攻击的完整结算过程
+
+actor "亚瑟\n(Combatant)" as ATK
+participant "旋风斩\n(AttackSkill)" as SK
+participant "DamageChain" as DC
+participant "DodgeHandler" as D1
+participant "ArmorHandler" as D2
+participant "BlockHandler" as D3
+participant "CritHandler" as D4
+participant "暗影魔龙\n(Combatant)" as DEF
+participant "EventBus" as BUS
+
+ATK -> SK : execute(caster, target, bus)
+activate SK
+
+SK -> DC : resolve(caster, target, 倍率 1.4)
+activate DC
+
+DC -> D1 : handle(ctx)
+activate D1
+D1 -> D1 : roll01() < dodgeRate ?
+note right of D1 : 命中，继续向后传递
+D1 -> D2 : handle(ctx)
+deactivate D1
+
+activate D2
+D2 -> ATK : damageType() == 物理
+D2 -> DEF : def() == 20
+D2 -> D2 : ctx.damage = max(1, 43 x 1.4 - 20) = 40
+D2 -> D3 : handle(ctx)
+deactivate D2
+
+activate D3
+D3 -> D3 : roll01() < blockRate(18%) ?
+note right of D3 : 未触发，伤害不变
+D3 -> D4 : handle(ctx)
+deactivate D3
+
+activate D4
+D4 -> D4 : roll01() < critRate(22%) ? 触发
+D4 -> D4 : ctx.damage = 40 x 2.0 = 80
+deactivate D4
+
+DC --> SK : ctx { damage=80, crit=true }
+deactivate DC
+
+SK -> DEF : takeDamage(80, "亚瑟")
+activate DEF
+DEF -> DEF : 实际伤害 = 80 x 状态易伤系数
+DEF --> SK : 实际扣血值
+deactivate DEF
+
+SK -> BUS : notify(CriticalHit, 源=亚瑟, 目标=暗影魔龙, 值=80)
+activate BUS
+BUS --> SK : 已分发给全部观察者
+deactivate BUS
+
+SK -> DEF : inflictState(Stunned)  —— 按 25% 概率
+activate DEF
+DEF -> DEF : 若目标免疫控制则忽略
+DEF -> BUS : notify(StateChanged)
+deactivate DEF
+
+SK --> ATK :
+deactivate SK
+
+note over D1, D4
+  <b>责任链的四个环节</b>
+  任一环节都可改变结果（格挡/暴击）甚至终止流程（闪避）。
+  新增"反伤""护盾吸收"只需实现一个 DamageHandler 并挂到链上。
+  <b>环节只判定，出口才广播</b>：本图示例中格挡未触发，
+  故只广播了一条 CriticalHit；若格挡触发，出口 performAttack()
+  会在扣血之后<b>额外</b>广播一条 EventType::Blocked，
+  由战斗日志（⊘ 前缀）与成就系统（「铜墙铁壁」）分别消费。
+end note
+
+@enduml

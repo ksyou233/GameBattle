@@ -1,0 +1,287 @@
+@startuml
+!pragma layout smetana
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam nodesep 20
+skinparam ranksep 30
+
+title 图 1  游戏战斗与技能系统 —— 主要类图
+
+' ============================================================
+'  图例：实线三角 = 继承 / 实现；菱形 = 聚合；箭头 = 关联/依赖
+' ============================================================
+
+package "core 核心" #F7F7FF {
+  class GameConfig <<单例>> {
+    - maxTurns_ : int
+    - critMultiplier_ : double
+    - blockRate_ : double
+    - rng_ : mt19937
+    + instance() : GameConfig&
+    + roll(low, high) : int
+    + roll01() : double
+    + critMultiplier() : double
+    + blockRate() : double
+  }
+
+  interface IBattleObserver {
+    + onEvent(event : BattleEvent)
+    + observerName() : string
+  }
+
+  class EventBus <<主题 Subject>> {
+    - observers_ : vector<IBattleObserver*>
+    + attach(o : IBattleObserver*)
+    + detach(o : IBattleObserver*)
+    + notify(event : BattleEvent)
+  }
+
+  class BattleEvent <<事件数据>> {
+    + type : EventType
+    + source : string
+    + target : string
+    + value : int
+    + message : string
+  }
+}
+
+package "character 参战单位" #FFF9F0 {
+  interface Combatant {
+    + name() : string
+    + hp() : int
+    + atk() : int
+    + def() : int
+    + critRate() : double
+    + dodgeRate() : double
+    + alive() : bool
+    + damageType() : DamageStrategy&
+    + takeDamage(amount, source) : int
+    + heal(amount)
+    + inflictState(kind)
+    + canAct() : bool
+    + tickState()
+    + immuneToControl() : bool
+    + skills() : vector<Skill>&
+    + ai() : AIStrategy*
+    + describe() : string
+  }
+
+  class Character {
+    - name_ : string
+    - hp_ : int
+    - baseAtk_ : int
+    - baseDef_ : int
+    - critRate_ : double
+    - damageStrategy_ : DamageStrategy*
+    - ai_ : AIStrategy*
+    - state_ : CharacterState*
+    - stateTurnsLeft_ : int
+    - skills_ : vector<Skill*>
+    + setAI(ai)
+    + addSkill(skill)
+    + setDamageStrategy(s)
+    + switchState(kind)
+  }
+
+  abstract class HeroPackageFactory {
+    + career() : string
+    + talent() : string
+    + applyTalent(c : Character) : void
+    + equip(base : Combatant) : Combatant
+    + signatureSkill() : Skill
+    + ultimateSkill() : Skill
+  }
+
+  class WarriorPackageFactory <<具体工厂>>
+  class MagePackageFactory <<具体工厂>>
+  class ArcherPackageFactory <<具体工厂>>
+}
+
+package "skill 技能" #F0FFF4 {
+  abstract class Skill {
+    + name() : string
+    + describe() : string
+    + execute(caster, target, bus)
+  }
+  class AttackSkill <<叶子>>
+  class HealSkill <<叶子>>
+  class ComboSkill <<容器>> {
+    - parts_ : vector<Skill*>
+    + add(part)
+  }
+}
+
+package "equipment 装备" #FFF0F5 {
+  abstract class EquipmentDecorator {
+    - inner_ : Combatant
+    - equipmentName_ : string
+    - chainLabel_ : string
+    # bonusAtk() : int
+    # bonusDef() : int
+    # bonusCrit() : double
+  }
+  class WeaponDecorator <<具体装饰>>
+  class ArmorDecorator <<具体装饰>>
+  class FireEnchantDecorator <<具体装饰>>
+  class CritGemDecorator <<具体装饰>>
+}
+
+package "combat 战斗算法" #F5F5FF {
+  abstract class DamageStrategy {
+    + name() : string
+    + compute(baseAtk, def) : int
+  }
+  class PhysicalDamage <<具体策略>>
+  class MagicDamage <<具体策略>>
+  class TrueDamage <<具体策略>>
+
+  abstract class AIStrategy {
+    + name() : string
+    + chooseSkill(self, enemies) : Skill*
+  }
+  class AggressiveAI <<具体策略>>
+  class DefensiveAI <<具体策略>>
+  class SupportAI <<具体策略>>
+
+  abstract class CharacterState {
+    + kind() : StateKind
+    + name() : string
+    + canAct() : bool
+    + atkMultiplier() : double
+    + defMultiplier() : double
+    + incomingMultiplier() : double
+    + immuneToControl() : bool
+    + duration() : int
+  }
+  class NormalState <<具体状态>>
+  class StunnedState <<具体状态>>
+  class FrozenState <<具体状态>>
+  class BerserkState <<具体状态>>
+
+  abstract class DamageHandler {
+    # next_ : DamageHandler*
+    + setNext(next)
+    + handle(ctx : DamageContext&)
+    + name() : string
+  }
+  class DodgeHandler <<具体处理者>>
+  class ArmorHandler <<具体处理者>>
+  class BlockHandler <<具体处理者>>
+  class CritHandler <<具体处理者>>
+
+  class DamageChain <<链的组装>> {
+    - handlers_ : vector<DamageHandler*>
+    + resolve(attacker, defender, mult) : DamageContext
+  }
+  class DamageContext <<上下文>> {
+    + attacker : Combatant*
+    + defender : Combatant*
+    + powerMultiplier : double
+    + damage : int
+    + dodged : bool
+    + blocked : bool
+    + crit : bool
+    + trace : vector<string>
+  }
+}
+
+package "observer 观察者" #FFFDF0 {
+  class BattleLogObserver <<具体观察者>>
+  class AchievementObserver <<具体观察者>>
+  class BossPhaseObserver <<具体观察者>> {
+    - watched_ : Combatant*
+    - hpThreshold_ : double
+    - triggerState_ : StateKind
+    - triggered_ : bool
+  }
+  class BattleRecorderObserver <<具体观察者>>
+}
+
+package "battle 战斗流程" #F0F8FF {
+  class Battle {
+    - heroes_ : vector<Combatant*>
+    - monsters_ : vector<Combatant*>
+    - bus_ : EventBus&
+    + addHero(unit)
+    + addMonster(unit)
+    + run() : BattleResult
+    + actOnce(actor)
+  }
+  enum BattleResult {
+    HeroesWin
+    MonstersWin
+    Draw
+  }
+}
+
+' ============================ 继承 / 实现 ============================
+Combatant <|.. Character
+Combatant <|.. EquipmentDecorator
+EquipmentDecorator <|-- WeaponDecorator
+EquipmentDecorator <|-- ArmorDecorator
+EquipmentDecorator <|-- FireEnchantDecorator
+EquipmentDecorator <|-- CritGemDecorator
+
+HeroPackageFactory <|-- WarriorPackageFactory
+HeroPackageFactory <|-- MagePackageFactory
+HeroPackageFactory <|-- ArcherPackageFactory
+
+Skill <|-- AttackSkill
+Skill <|-- HealSkill
+Skill <|-- ComboSkill
+
+DamageStrategy <|-- PhysicalDamage
+DamageStrategy <|-- MagicDamage
+DamageStrategy <|-- TrueDamage
+
+AIStrategy <|-- AggressiveAI
+AIStrategy <|-- DefensiveAI
+AIStrategy <|-- SupportAI
+
+CharacterState <|-- NormalState
+CharacterState <|-- StunnedState
+CharacterState <|-- FrozenState
+CharacterState <|-- BerserkState
+
+DamageHandler <|-- DodgeHandler
+DamageHandler <|-- ArmorHandler
+DamageHandler <|-- BlockHandler
+DamageHandler <|-- CritHandler
+
+IBattleObserver <|.. BattleLogObserver
+IBattleObserver <|.. AchievementObserver
+IBattleObserver <|.. BossPhaseObserver
+IBattleObserver <|.. BattleRecorderObserver
+
+' ============================ 聚合 / 组合 ============================
+Character o-- "*" Skill : 持有技能表
+ComboSkill o-- "1..*" Skill : parts 子技能
+EquipmentDecorator o-- "1" Combatant : inner 被装饰对象
+EventBus o-- "*" IBattleObserver : 订阅名单
+Battle o-- "*" Combatant : 双方参战单位
+Battle o-- "1" EventBus : 事件广播
+DamageChain o-- "4" DamageHandler : 链上环节
+BossPhaseObserver --> "1" Combatant : 监听目标
+
+' ============================ 关联 / 依赖 ============================
+Character --> "1" DamageStrategy : 伤害策略
+Character --> "1" AIStrategy : 决策策略
+Character --> "1" CharacterState : 当前状态
+HeroPackageFactory ..> Combatant : 创建并装饰
+HeroPackageFactory ..> Skill : 创建技能
+Battle ..> AIStrategy : 询问决策
+Battle ..> Skill : 调用 execute
+DamageChain ..> DamageContext : 传递上下文
+DamageHandler ..> DamageContext : 逐级修改
+ArmorHandler ..> DamageStrategy : 调用伤害算法
+DamageChain ..> GameConfig : 读取暴击/格挡参数
+CritHandler ..> GameConfig : 读取暴击倍率
+Character ..> EventBus : 广播状态变化
+Battle ..> BattleEvent : 构造事件
+EventBus ..> BattleEvent : 分发
+Battle ..> BattleResult : 返回胜负
+
+@enduml

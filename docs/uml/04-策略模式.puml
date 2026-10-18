@@ -1,0 +1,79 @@
+@startuml
+!pragma layout smetana
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam nodesep 25
+skinparam ranksep 26
+
+title 图 4  策略模式 Strategy —— 伤害算法与 AI 决策算法
+
+package "策略族一：伤害计算规则" #F5F5FF {
+  abstract class DamageStrategy <<抽象策略>> {
+    + name() : string
+    + compute(baseAtk, def) : int
+  }
+  class PhysicalDamage <<具体策略>> {
+    + compute() : max(1, atk - def)
+  }
+  class MagicDamage <<具体策略>> {
+    + compute() : max(1, atk - def/2)
+  }
+  class TrueDamage <<具体策略>> {
+    + compute() : max(1, atk)
+  }
+}
+
+package "策略族二：战斗 AI 决策" #F0FFF4 {
+  abstract class AIStrategy <<抽象策略>> {
+    + name() : string
+    + chooseSkill(self, enemies) : Skill*
+  }
+  class AggressiveAI <<具体策略>> {
+    随机挑选一个攻击技能
+  }
+  class DefensiveAI <<具体策略>> {
+    血量 < 30% 时返回 nullptr（防御）
+  }
+  class SupportAI <<具体策略>> {
+    血量 < 50% 且有治疗技能 → 自救
+    否则释放最强攻击手段
+  }
+}
+
+class Character <<上下文 Context>> {
+  - damageStrategy_ : DamageStrategy*
+  - ai_ : AIStrategy*
+  + setDamageStrategy(s)
+  + setAI(ai)
+}
+
+note right of Character
+  <b>上下文只持有抽象策略</b>
+  它调用 damageType().compute(atk, def) 与
+  ai().chooseSkill(...)，完全不知道背后是哪个具体算法。
+  换算法 = 换一个对象，运行期即可完成。
+end note
+
+DamageStrategy <|-- PhysicalDamage
+DamageStrategy <|-- MagicDamage
+DamageStrategy <|-- TrueDamage
+
+AIStrategy <|-- AggressiveAI
+AIStrategy <|-- DefensiveAI
+AIStrategy <|-- SupportAI
+
+Character --> "1" DamageStrategy : 委托伤害计算
+Character --> "1" AIStrategy : 委托行动决策
+
+note bottom of DamageStrategy
+  <b>在本项目中的实际效果</b>
+  同一个 ArmorHandler 环节，只因攻击方持有的策略不同，
+  就得到三套完全不同的减伤结果：
+  战士巨剑(物理)被高防 BOSS 大幅减伤，
+  法师(魔法)只吃一半防御，
+  BOSS(真实)无视防御。
+end note
+
+@enduml
